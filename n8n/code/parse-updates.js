@@ -10,24 +10,30 @@ if (updates.length === 0) return []; // nothing new: the run stops here
 // Confirming this ID + 1 at the end tells Telegram not to send these again
 const maxUpdateId = Math.max(...updates.map((u) => u.update_id));
 
+// n8n's Code sandbox has no `URL` class, so links are split with a regex instead
+function splitUrl(raw) {
+  const [, host = '', path = '', query = ''] =
+    raw.match(/^https?:\/\/([^/?#]+)([^?#]*)(\?[^#]*)?/i) ?? [];
+  return { host: host.toLowerCase(), path, query };
+}
+
 function cleanUrl(raw) {
-  const url = new URL(raw);
+  const { host, path, query } = splitUrl(raw);
 
   // Instagram: /reel/X, /reels/X and /p/X are the same Reel, so keep only the code
   // (/share/… links hide the real code; step 3 resolves those)
-  const insta = url.hostname.endsWith('instagram.com')
-    && !url.pathname.startsWith('/share/')
-    && url.pathname.match(/^\/(?:[\w.]+\/)?(?:reels?|p|tv)\/([\w-]+)/);
+  const insta = host.endsWith('instagram.com')
+    && !path.startsWith('/share/')
+    && path.match(/^\/(?:[\w.]+\/)?(?:reels?|p|tv)\/([\w-]+)/);
   if (insta) return `https://www.instagram.com/reel/${insta[1]}`;
 
-  const videoId = url.searchParams.get('v'); // youtube.com/watch?v=… needs this one
-  url.search = videoId ? `?v=${videoId}` : ''; // drop tracking like ?igsh= and ?is_from_webapp=
-  url.hash = '';
-  return url.toString().replace(/\/$/, '');
+  const videoId = query.match(/[?&]v=([^&]+)/); // youtube.com/watch?v=… needs this one
+  // drop tracking like ?igsh= and ?is_from_webapp=, and any #fragment
+  return `https://${host}${path.replace(/\/$/, '')}${videoId ? `?v=${videoId[1]}` : ''}`;
 }
 
 function platformOf(url) {
-  const host = new URL(url).hostname;
+  const { host } = splitUrl(url);
   if (host.includes('tiktok.com')) return 'tiktok';
   if (host.includes('instagram.com')) return 'instagram';
   if (host.includes('youtube.com') || host.includes('youtu.be')) return 'youtube';
@@ -41,7 +47,7 @@ return updates.map((u) => {
   }
 
   const text = msg.text ?? msg.caption ?? '';
-  const found = text.match(/https?:\/\/\S+/);
+  const found = text.match(/https?:\/\/\S+/i);
   const base = { chatId: msg.chat.id, messageId: msg.message_id, maxUpdateId };
   if (!found) return { json: { ...base, route: 'noLink' } };
 
