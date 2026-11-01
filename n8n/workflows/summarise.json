@@ -1,0 +1,351 @@
+{
+  "name": "Summarise",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "274de0f4-4abe-4f09-8ea0-b2d316f03dfb",
+      "name": "Every 10 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -496,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "reels",
+        "limit": 5,
+        "filterType": "string",
+        "filterString": "status=eq.new&has_speech=not.is.null"
+      },
+      "id": "dd674aac-d280-4c42-863b-ba5f92b43f7b",
+      "name": "Fetch transcribed Reels",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "f61816ed-8bf4-40ba-8f7c-7ea11df1c408",
+      "name": "Loop over reels",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -48,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node \"Build request\" (mode: Run Once for Each Item).\n// Input: one transcribed Reel row from Supabase. Output: { id, body }, where body is\n// the OpenRouter chat request that the \"Summarise\" HTTP node sends as-is.\n\n// Tried in order; if one is down or rate-limited, OpenRouter moves to the next.\n// openrouter/free picks any free model that's up, so the list can't go fully stale.\nconst MODELS = [\n  'openai/gpt-oss-120b:free',\n  'google/gemma-4-31b-it:free',\n  'openrouter/free',\n];\n\nconst CATEGORIES = [\n  'AI & Tech',\n  'Self-Help & Mindset',\n  'Socialising & Relationships',\n  'Health & Fitness',\n  'Money & Career',\n  'Other',\n];\n\nconst SYSTEM = `You turn one short video (an Instagram Reel, TikTok or YouTube Short) into notes for a weekly self-improvement digest written in the style of Atomic Habits: practical, specific, no hype.\n\nReply with ONLY a JSON object, no markdown, in exactly this shape:\n{\n  \"summary\": \"2-3 plain sentences: the video's main idea and why it matters. No 'In this video'.\",\n  \"category\": \"one of: ${CATEGORIES.join(' | ')}\",\n  \"action_steps\": [\n    {\n      \"step\": \"one concrete thing to do, as an instruction, max 12 words\",\n      \"how\": \"exactly how to do it: when, where, or the words to say. 1-2 sentences.\",\n      \"two_minute_version\": \"a version that takes under two minutes, to start the habit today\"\n    }\n  ]\n}\n\nRules:\n- Use only what the video says. Never add facts, numbers, names or advice it doesn't contain.\n- 1 to 3 action steps, best first. If the video has nothing anyone could act on (news, a joke), return an empty list.\n- If the viewer left a note, it says what they care about: put that part first and build the steps around it.\n- If there is no transcript, work from the caption only and keep the summary short. Don't guess what was said.\n- Category guide: AI tools, apps, coding, tech news = \"AI & Tech\". Habits, discipline, motivation, mindset = \"Self-Help & Mindset\". Conversation, dating, friends, family = \"Socialising & Relationships\". Exercise, food, sleep = \"Health & Fitness\". Money, investing, jobs, skills for work = \"Money & Career\". Anything else = \"Other\".`;\n\nconst MAX_TRANSCRIPT_CHARS = 12000; // a long video still fits a free model's window\n\nconst reel = $json;\nconst transcript = (reel.transcript || '').slice(0, MAX_TRANSCRIPT_CHARS);\nconst user = [\n  `Viewer's note: ${reel.note || '(none)'}`,\n  `Caption: ${reel.caption || '(none)'}`,\n  reel.has_speech && transcript\n    ? `Transcript:\\n${transcript}`\n    : 'Transcript: (none: this video has no speech, only music and on-screen text)',\n].join('\\n\\n');\n\nreturn {\n  json: {\n    id: reel.id,\n    body: {\n      models: MODELS,\n      messages: [\n        { role: 'system', content: SYSTEM },\n        { role: 'user', content: user },\n      ],\n      response_format: { type: 'json_object' },\n      temperature: 0.3,\n    },\n  },\n};\n"
+      },
+      "id": "ce5e49b6-29b7-46b6-9c86-d1ae16b6311c",
+      "name": "Build request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "ea2c6c7d-e59c-4c64-a914-789a8f6cd087",
+      "name": "Summarise",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        432,
+        -176
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "3WyQpTEoDCSBkCoU",
+          "name": "OpenRouter account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node \"Read summary\" (mode: Run Once for Each Item).\n// Input: OpenRouter's reply. Output: the columns \"Save summary\" writes, with\n// status 'done'. Throws on anything unusable, so the item goes down the error\n// output to \"Describe failure\" and gets one retry.\n\nconst CATEGORIES = [\n  'AI & Tech',\n  'Self-Help & Mindset',\n  'Socialising & Relationships',\n  'Health & Fitness',\n  'Money & Career',\n  'Other',\n];\n\nconst id = $('Build request').item.json.id;\n\n// OpenRouter can answer 200 with an error inside (e.g. every model was busy)\nif ($json.error) throw new Error(`OpenRouter: ${$json.error.message ?? JSON.stringify($json.error)}`);\n\nconst content = $json.choices?.[0]?.message?.content ?? '';\nconst model = $json.model ?? 'unknown model';\n\n// Free models sometimes wrap the JSON in ```json fences or add a sentence around it\nconst start = content.indexOf('{');\nconst end = content.lastIndexOf('}');\nif (start === -1 || end <= start) throw new Error(`${model} didn't return JSON: ${content.slice(0, 200)}`);\n\nlet data;\ntry {\n  data = JSON.parse(content.slice(start, end + 1));\n} catch (e) {\n  throw new Error(`${model} returned broken JSON: ${e.message}`);\n}\n\nconst summary = String(data.summary ?? '').trim();\nif (!summary) throw new Error(`${model} returned no summary`);\n\n// Match the category even if the model changed its case or spacing; anything else is Other\nconst wanted = String(data.category ?? '').toLowerCase().replace(/\\s+/g, ' ').trim();\nconst category = CATEGORIES.find((c) => c.toLowerCase() === wanted) ?? 'Other';\n\nconst actionSteps = (Array.isArray(data.action_steps) ? data.action_steps : [])\n  .filter((s) => s && String(s.step ?? '').trim())\n  .slice(0, 3)\n  .map((s) => ({\n    step: String(s.step).trim(),\n    how: String(s.how ?? '').trim(),\n    two_minute_version: String(s.two_minute_version ?? '').trim(),\n  }));\n\nreturn {\n  json: { id, summary, category, action_steps: actionSteps, status: 'done' },\n};\n"
+      },
+      "id": "94211396-4c41-45ac-83d1-0e0c0edca896",
+      "name": "Read summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -144
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reels",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "dataToSend": "autoMapInputData",
+        "inputsToIgnore": "id"
+      },
+      "id": "494af397-996d-4e97-912c-22bd7191c989",
+      "name": "Save summary",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        -48
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node \"Describe failure\" (mode: Run Once for Each Item).\n// Every failed step's error output ends here. It counts the attempt and gives up\n// after one retry, which makes the Reel a Failed Reel for the Digest.\n\nconst MAX_ATTEMPTS = 2; // first try + one retry\n\nconst reel = $('Loop over reels').item.json;\nconst e = $json.error;\nconst message = e\n  ? (typeof e === 'string' ? e : e.message ?? JSON.stringify(e))\n  : `Can't read ${reel.platform} links yet`; // came from the Switch's fallback output\n\nconst attempts = (reel.retry_count ?? 0) + 1;\nreturn {\n  json: {\n    id: reel.id,\n    retry_count: attempts,\n    status: attempts >= MAX_ATTEMPTS ? 'failed' : 'new',\n    last_error: String(message).slice(0, 500),\n  },\n};\n"
+      },
+      "id": "a5b6d66f-b274-4e4c-bcdb-0da38c48dd5d",
+      "name": "Describe failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reels",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "retry_count",
+              "fieldValue": "={{ $json.retry_count }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "last_error",
+              "fieldValue": "={{ $json.last_error }}"
+            }
+          ]
+        }
+      },
+      "id": "e63c0ab5-4d89-43f0-aac6-fd2bd1b2cd8b",
+      "name": "Save failure",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        848,
+        240
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 10 minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch transcribed Reels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch transcribed Reels": {
+      "main": [
+        [
+          {
+            "node": "Loop over reels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop over reels": {
+      "main": [
+        null,
+        [
+          {
+            "node": "Build request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build request": {
+      "main": [
+        [
+          {
+            "node": "Summarise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise": {
+      "main": [
+        [
+          {
+            "node": "Read summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read summary": {
+      "main": [
+        [
+          {
+            "node": "Save summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save summary": {
+      "main": [
+        [
+          {
+            "node": "Loop over reels",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Describe failure": {
+      "main": [
+        [
+          {
+            "node": "Save failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save failure": {
+      "main": [
+        [
+          {
+            "node": "Loop over reels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "fa071d7f-62aa-4db5-b51b-ab850b998d3f",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "52bb93e5113a268bd5dd1d73cfa885dd1c714d1431c8e6adcce1698c99d56232"
+  },
+  "nodeGroups": [],
+  "id": "k8ocLbjp8ygR3r3t",
+  "tags": []
+}
