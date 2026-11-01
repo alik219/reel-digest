@@ -114,11 +114,25 @@ On the canvas, the Switch now has three exit dots labelled `link`, `noLink` and 
 
 ---
 
-### 5. Supabase: "Find existing" (on the `link` output)
+### 4b. Loop Over Items: "Loop over links" (on the `link` output)
+
+*What it does: sends the links through the duplicate check one at a time. If you share 3 Reels between two runs, one run gets all 3.*
+
+1. Click the **+** on the Switch's **`link`** output → search **Loop Over Items**.
+2. **Batch Size:** `1`.
+3. Rename it **Loop over links**.
+
+It has two outputs. **loop** sends one link down the path (steps 5–9). Whatever comes back into its input gets the next link. When all of them are through, **done** releases every Receipt at once.
+
+**Why it's needed:** with "Always Output Data" (step 5), two new links in one run come out of the lookup as *one* empty item. n8n can't tell which message it belongs to, and **Save Reel** fails with `Multiple matches found`. One at a time also means the same link sent twice in one run gets `↩️ Already saved` the second time, not a database error.
+
+---
+
+### 5. Supabase: "Find existing" (on the loop's `loop` output)
 
 *What it does: looks up whether this link is already in your `reels` table. This is the duplicate check.*
 
-1. Click the **+** on the Switch's **`link`** output → search **Supabase**.
+1. Click the **+** on **Loop over links**' **`loop`** output → search **Supabase**.
 2. **Credential:** your Supabase account. **Resource:** Row. **Operation:** Get Many.
 3. **Table Name or ID:** `reels`.
 4. **Return All:** off. **Limit:** 1.
@@ -159,13 +173,13 @@ A found row has an `id`, so it goes to **true**. The empty item from step 5 does
 
    | Field Name | Field Value |
    |---|---|
-   | `url` | `{{ $('Route message').item.json.url }}` |
-   | `platform` | `{{ $('Route message').item.json.platform }}` |
-   | `note` | `{{ $('Route message').item.json.note }}` |
+   | `url` | `{{ $('Loop over links').item.json.url }}` |
+   | `platform` | `{{ $('Loop over links').item.json.platform }}` |
+   | `note` | `{{ $('Loop over links').item.json.note }}` |
 
 4. Rename it **Save Reel**.
 
-**Why `$('Route message').item` and not `$json`:** at this point `$json` is the empty result of the lookup. `$('Route message').item` reaches back to the matching message from before the lookup. n8n keeps track of which item came from which.
+**Why `$('Loop over links').item` and not `$json`:** at this point `$json` is the empty result of the lookup. `$('Loop over links').item` reaches back to the link this loop round is handling. n8n keeps track of which item came from which.
 
 ---
 
@@ -183,6 +197,8 @@ For each of these: **+** → search **Edit Fields (Set)** → **Mode:** Manual M
 
 In **Receipt: duplicate**, `$json` is the row Supabase found, so `shared_at` is when you first shared it. `toFormat('ccc d LLL')` turns it into something like "Fri 31 Oct".
 
+Then close the loop: drag from the output dot of **Receipt: saved** onto **Loop over links**' input dot, and do the same for **Receipt: duplicate**. That's the "next link, please" signal.
+
 ---
 
 ### 11. Telegram: "Send Receipt"
@@ -197,7 +213,7 @@ In **Receipt: duplicate**, `$json` is the row Supabase found, so `shared_at` is 
    - **Reply To Message ID:** `{{ $('Route message').item.json.messageId }}`
    - **Append n8n Attribution:** off (otherwise every Receipt ends with an n8n ad)
 6. Rename it **Send Receipt**.
-7. Connect the other two Receipts to it: drag from the output dot of **Receipt: saved** onto **Send Receipt**'s input dot, and do the same for **Receipt: duplicate**. Three lines should now go into it.
+7. Connect **Loop over links**' **`done`** output to **Send Receipt**'s input dot. Two lines should now go into it: one from **Receipt: no link** and one from **done**.
 8. **Execute step:** your bot should reply `❌ No Reel link found` to both `/start` and `Hello`. 🎉 First Receipt.
 
 ---
@@ -225,11 +241,13 @@ Confirm may run twice in one run (once from **Send Receipt** and once from **ign
 
 ```
 Every 2 minutes → Fetch updates → Parse updates → Route message
-   link   → Find existing → Already saved?
-               true  → Receipt: duplicate ─┐
-               false → Save Reel → Receipt: saved ─┤
-   noLink → Receipt: no link ──────────────────────┴→ Send Receipt → Confirm updates
-   ignore ─────────────────────────────────────────────────────────→ Confirm updates
+   link   → Loop over links
+               loop → Find existing → Already saved?
+                         true  → Receipt: duplicate ──────────┐
+                         false → Save Reel → Receipt: saved ──┴→ back into Loop over links
+               done ─────────────────────────────────────────┐
+   noLink → Receipt: no link ────────────────────────────────┴→ Send Receipt → Confirm updates
+   ignore ───────────────────────────────────────────────────────────────────→ Confirm updates
 ```
 
 ## F. Test it
@@ -247,4 +265,4 @@ Use **Execute workflow** (bottom of the canvas) for each test. It runs the whole
 
 Instagram links are cleaned to one form, so `/reel/X`, `/reels/X`, `/p/X` and links with `?igsh=…` all count as the same Reel. Two kinds of link still slip past the duplicate check, because they hide the real video code: Instagram `instagram.com/share/…` links and TikTok short links (`vm.tiktok.com/…`). Step 3 fixes this when Apify returns the real video URL.
 
-When it all works, tick step 2 in the README and export the workflow (**⋯** top right → **Download**) to `n8n/workflows/inbox.json`. The export holds credential *names* only, never the keys.
+When it all works, tick step 2 in the README and export the workflow (**⋯** next to the workflow name → **Export JSON**) and save it as `n8n/workflows/inbox.json`. Ignore **Push to Git**: that's n8n's paid source-control feature, and you commit with git yourself. The export holds credential *names* only, never the keys.

@@ -9,7 +9,7 @@ n8n (Docker, local) · Telegram bot · Apify · Groq Whisper · OpenRouter · Su
 ## Build progress
 
 - [x] 1. Supabase tables: run [sql/001_tables.sql](sql/001_tables.sql) and [sql/002_lock_rls_helper.sql](sql/002_lock_rls_helper.sql) in the Supabase SQL Editor
-- [ ] 2. n8n + Telegram bot + Receipt: follow [docs/step-2.md](docs/step-2.md)
+- [x] 2. n8n + Telegram bot + Receipt: follow [docs/step-2.md](docs/step-2.md) (workflow: [n8n/workflows/inbox.json](n8n/workflows/inbox.json))
 - [ ] 3. Apify + Groq Whisper → Transcript
 - [ ] 4. OpenRouter per-Reel summary
 - [ ] 5. Sunday Digest via Resend

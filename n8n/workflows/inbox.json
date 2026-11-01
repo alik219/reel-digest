@@ -1,0 +1,538 @@
+{
+  "name": "Inbox",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getUpdates?timeout=0",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -224,
+        -16
+      ],
+      "id": "e59ae75b-71cc-4995-b3ef-11516e3ee573",
+      "name": "Fetch updates"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -496,
+        -16
+      ],
+      "id": "88dc10ed-2b62-4a60-b5d7-307437ec4b24",
+      "name": "Every 2 minutes"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node \"Parse updates\" (mode: Run Once for All Items).\n// Input: Telegram's getUpdates response. Output: one item per message,\n// each with a `route` of \"ignore\", \"noLink\" or \"link\" for the Switch node.\n\nconst MY_TELEGRAM_ID = 9225448547; // ← replace 0 with your own Telegram user ID\n\nconst updates = $input.first().json.result ?? [];\nif (updates.length === 0) return []; // nothing new: the run stops here\n\n// Confirming this ID + 1 at the end tells Telegram not to send these again\nconst maxUpdateId = Math.max(...updates.map((u) => u.update_id));\n\n// n8n's Code sandbox has no `URL` class, so links are split with a regex instead\nfunction splitUrl(raw) {\n  const [, host = '', path = '', query = ''] =\n    raw.match(/^https?:\\/\\/([^/?#]+)([^?#]*)(\\?[^#]*)?/i) ?? [];\n  return { host: host.toLowerCase(), path, query };\n}\n\nfunction cleanUrl(raw) {\n  const { host, path, query } = splitUrl(raw);\n\n  // Instagram: /reel/X, /reels/X and /p/X are the same Reel, so keep only the code\n  // (/share/… links hide the real code; step 3 resolves those)\n  const insta = host.endsWith('instagram.com')\n    && !path.startsWith('/share/')\n    && path.match(/^\\/(?:[\\w.]+\\/)?(?:reels?|p|tv)\\/([\\w-]+)/);\n  if (insta) return `https://www.instagram.com/reel/${insta[1]}`;\n\n  const videoId = query.match(/[?&]v=([^&]+)/); // youtube.com/watch?v=… needs this one\n  // drop tracking like ?igsh= and ?is_from_webapp=, and any #fragment\n  return `https://${host}${path.replace(/\\/$/, '')}${videoId ? `?v=${videoId[1]}` : ''}`;\n}\n\nfunction platformOf(url) {\n  const { host } = splitUrl(url);\n  if (host.includes('tiktok.com')) return 'tiktok';\n  if (host.includes('instagram.com')) return 'instagram';\n  if (host.includes('youtube.com') || host.includes('youtu.be')) return 'youtube';\n  return 'other';\n}\n\nreturn updates.map((u) => {\n  const msg = u.message;\n  if (!msg || msg.from?.id !== MY_TELEGRAM_ID) {\n    return { json: { route: 'ignore', maxUpdateId } }; // not you: no reply, no AI\n  }\n\n  const text = msg.text ?? msg.caption ?? '';\n  const found = text.match(/https?:\\/\\/\\S+/i);\n  const base = { chatId: msg.chat.id, messageId: msg.message_id, maxUpdateId };\n  if (!found) return { json: { ...base, route: 'noLink' } };\n\n  const url = cleanUrl(found[0]);\n  const note = text.replace(found[0], '').trim();\n  return {\n    json: { ...base, route: 'link', url, platform: platformOf(url), note: note || null },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -16
+      ],
+      "id": "6b12f717-af44-4611-8e76-842a5c378ea9",
+      "name": "Parse updates"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "link",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "link"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "noLink",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "noLink"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "ignore",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "ignore"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0f438aeb-1cf1-4aec-b1ab-78fabb03376c",
+      "name": "Route message",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        224,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "reels",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "url",
+              "condition": "eq",
+              "keyValue": "={{ $json.url }}"
+            }
+          ]
+        }
+      },
+      "id": "cb741574-9f8a-475c-a359-4df346783dbb",
+      "name": "Find existing",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        688,
+        -208
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "99576802-6800-4ac8-b412-02a52e8acd03",
+      "name": "Already saved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r-dup",
+              "name": "receipt",
+              "type": "string",
+              "value": "=↩️ Already saved (shared {{ DateTime.fromISO($json.shared_at).toFormat('ccc d LLL') }})"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7ccd8abc-d118-40e0-b7ea-9d6afd5bd1f9",
+      "name": "Receipt: duplicate",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "reels",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $('Loop over links').item.json.url }}"
+            },
+            {
+              "fieldId": "platform",
+              "fieldValue": "={{ $('Loop over links').item.json.platform }}"
+            },
+            {
+              "fieldId": "note",
+              "fieldValue": "={{ $('Loop over links').item.json.note }}"
+            }
+          ]
+        }
+      },
+      "id": "e3894e4c-d3cd-4f9b-888e-bde167e021b4",
+      "name": "Save Reel",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1136,
+        -144
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r-saved",
+              "name": "receipt",
+              "type": "string",
+              "value": "✅ Saved"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "56591982-22eb-4695-930f-96966958cab5",
+      "name": "Receipt: saved",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1360,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r-nolink",
+              "name": "receipt",
+              "type": "string",
+              "value": "❌ No Reel link found"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0c702555-eebd-433c-8364-56bff7aa1a90",
+      "name": "Receipt: no link",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route message').item.json.chatId }}",
+        "text": "={{ $json.receipt }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "reply_to_message_id": "={{ $('Route message').item.json.messageId }}"
+        }
+      },
+      "id": "fc05821a-76a5-40bb-9914-265229e6a51b",
+      "name": "Send Receipt",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1536,
+        224
+      ],
+      "webhookId": "106987c3-d6c4-4d1d-b498-7fd38e13a4be",
+      "credentials": {
+        "telegramApi": {
+          "id": "6pKEfrfhsPMgRNuC",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getUpdates?offset={{ $('Parse updates').first().json.maxUpdateId + 1 }}&limit=1&timeout=0",
+        "options": {}
+      },
+      "id": "90761b9a-2bca-481c-a7ee-e67f00f5e8c7",
+      "name": "Confirm updates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1840,
+        80
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "ec351254-514a-4074-93c0-df86ac8c21d1",
+      "name": "Loop over links",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        464,
+        -208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 2 minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch updates": {
+      "main": [
+        [
+          {
+            "node": "Parse updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse updates": {
+      "main": [
+        [
+          {
+            "node": "Route message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route message": {
+      "main": [
+        [
+          {
+            "node": "Loop over links",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Receipt: no link",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Confirm updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find existing": {
+      "main": [
+        [
+          {
+            "node": "Already saved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already saved?": {
+      "main": [
+        [
+          {
+            "node": "Receipt: duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Reel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Reel": {
+      "main": [
+        [
+          {
+            "node": "Receipt: saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receipt: no link": {
+      "main": [
+        [
+          {
+            "node": "Send Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Receipt": {
+      "main": [
+        [
+          {
+            "node": "Confirm updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop over links": {
+      "main": [
+        [
+          {
+            "node": "Send Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find existing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receipt: duplicate": {
+      "main": [
+        [
+          {
+            "node": "Loop over links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receipt: saved": {
+      "main": [
+        [
+          {
+            "node": "Loop over links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "91b70c09-f843-4366-91a1-660c9c183112",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "52bb93e5113a268bd5dd1d73cfa885dd1c714d1431c8e6adcce1698c99d56232"
+  },
+  "nodeGroups": [],
+  "id": "mO7u5h3wQ4gzCDqY",
+  "tags": []
+}
