@@ -1,0 +1,776 @@
+{
+  "name": "Transcribe",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "7a58fd11-696f-4781-90f0-f91997c8e12f",
+      "name": "Every 10 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -496,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "reels",
+        "limit": 5,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "new"
+            },
+            {
+              "keyName": "has_speech",
+              "condition": "is",
+              "keyValue": "null"
+            }
+          ]
+        }
+      },
+      "id": "86e5466f-d5bf-4ebe-8b7f-0617ee34278b",
+      "name": "Fetch new Reels",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "ab44c5ff-97a1-4cc2-aa7c-fac244a892b5",
+      "name": "Loop over reels",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -48,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.platform }}",
+                    "rightValue": "instagram",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "instagram"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.platform }}",
+                    "rightValue": "tiktok",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "tiktok"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.platform }}",
+                    "rightValue": "youtube",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "youtube"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "other"
+        }
+      },
+      "id": "cb9813d8-fcda-4988-8b94-af2f0ce244e1",
+      "name": "Which platform?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        176,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"directUrls\": [\"{{ $json.url }}\"],\n  \"resultsType\": \"posts\",\n  \"resultsLimit\": 1\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "15fa7b83-7b1e-48ed-82bf-fa73613ad2fb",
+      "name": "Apify: Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        432,
+        -240
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "8glINbJX66Jk1JwH",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/clockworks~tiktok-video-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"postURLs\": [\"{{ $json.url }}\"],\n  \"shouldDownloadVideos\": true\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "e5ade8ca-b958-456a-a728-28a632b8c018",
+      "name": "Apify: TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        432,
+        -80
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "8glINbJX66Jk1JwH",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/starvibe~youtube-video-transcript/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"youtube_url\": \"{{ $json.url }}\",\n  \"language\": \"en\",\n  \"include_transcript_text\": true\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "1fc07954-c084-43d5-94c1-75857a47a0f5",
+      "name": "Apify: YouTube",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        544,
+        32
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "8glINbJX66Jk1JwH",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node \"Pick media\" (mode: Run Once for Each Item).\n// Input: Apify's full response (Instagram or TikTok); its results list is in `body`.\n// Output: the same shape for both, { id, caption, mediaUrl, realUrl }. Throws when\n// there's nothing to transcribe, so the item goes down the error output to \"Describe failure\".\n\nconst reel = $('Loop over reels').item.json; // the Supabase row this round is handling\nconst r = $json.body?.[0]; // we asked for 1 result\n\nif (!r || Object.keys(r).length === 0) {\n  throw new Error('Apify found nothing at this link (deleted or private?)');\n}\nif (r.error) {\n  throw new Error(`Apify: ${r.error}${r.errorDescription ? ` (${r.errorDescription})` : ''}`);\n}\n\nif (reel.platform === 'instagram') {\n  // audioUrl is the sound only (much smaller); some posts only have videoUrl\n  const mediaUrl = r.audioUrl || r.videoUrl;\n  if (!mediaUrl) throw new Error('This Instagram post has no video');\n  // shortCode is the real Reel code, which also resolves instagram.com/share/… links\n  const realUrl = r.shortCode ? `https://www.instagram.com/reel/${r.shortCode}` : reel.url;\n  return { json: { id: reel.id, caption: r.caption || null, mediaUrl, realUrl } };\n}\n\n// TikTok: mediaUrls is filled because \"shouldDownloadVideos\" is on\nconst mediaUrl = r.mediaUrls?.[0];\nif (!mediaUrl) {\n  throw new Error(r.isSlideshow ? 'TikTok slideshow (photos, no video)' : 'TikTok video could not be downloaded');\n}\n// webVideoUrl is the full link, which also resolves vm.tiktok.com short links\nconst realUrl = (r.webVideoUrl || reel.url).split('?')[0];\nreturn { json: { id: reel.id, caption: r.text || null, mediaUrl, realUrl } };\n"
+      },
+      "id": "839d0c34-adcc-4122-a4bf-62faeff5be2d",
+      "name": "Pick media",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -304
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.mediaUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "17294b49-73ab-4bcf-9f2c-d5eeaddef4aa",
+      "name": "Download media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        -304
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node \"Name file\" (mode: Run Once for Each Item).\n// Groq decides the file type from its name, and download links don't always end\n// in .mp4, so give the downloaded file a name it accepts.\n\n$input.item.binary.data.fileName = 'reel.mp4';\nreturn $input.item;\n"
+      },
+      "id": "c672ed90-81e4-4ecc-8be1-f67851748114",
+      "name": "Name file",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-large-v3-turbo"
+            },
+            {
+              "name": "response_format",
+              "value": "verbose_json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "376ed317-8a76-4efd-b4fc-1e879673d710",
+      "name": "Whisper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1424,
+        -272
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "gkct08jLWYmjakBw",
+          "name": "Groq account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node \"Check speech\" (mode: Run Once for Each Item).\n// Input: Groq Whisper's verbose_json. Output: the fields \"Save transcript\" writes.\n// On music-only Reels Whisper still \"hears\" a few words, so a short result, or one\n// Whisper itself thinks is probably not speech, counts as a No-speech Reel.\n\nconst MIN_WORDS = 15;          // fewer than this is not enough to summarise\nconst MAX_NO_SPEECH = 0.5;     // Whisper's own \"this is probably not speech\" score, 0 to 1\n\nconst text = ($json.text ?? '').trim();\nconst segments = $json.segments ?? [];\n\nconst words = text.split(/\\s+/).filter(Boolean).length;\nconst noSpeech = segments.length\n  ? segments.reduce((sum, s) => sum + (s.no_speech_prob ?? 0), 0) / segments.length\n  : 1;\nconst hasSpeech = words >= MIN_WORDS && noSpeech < MAX_NO_SPEECH;\n\nconst media = $('Pick media').item.json;\nreturn {\n  json: {\n    id: media.id,\n    url: media.realUrl,\n    caption: media.caption,\n    has_speech: hasSpeech,\n    transcript: hasSpeech ? text : '',\n  },\n};\n"
+      },
+      "id": "dd3ff5a8-3014-4c74-a98e-cd78ff7ff20f",
+      "name": "Check speech",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node \"YouTube transcript\" (mode: Run Once for Each Item).\n// Input: the full response of the starvibe/youtube-video-transcript Apify actor, which\n// reads YouTube's own captions (no download, no Whisper); its result is in `body`.\n// Output: the same fields as \"Check speech\", so it goes straight into \"Save transcript\".\n\nconst MIN_WORDS = 15; // same bar as \"Check speech\"\n\nconst reel = $('Loop over reels').item.json;\nconst r = $json.body?.[0];\n\n// No title means YouTube didn't return the video at all (removed, private, bad link)\nif (!r || !r.title) {\n  throw new Error(`YouTube: ${r?.message || 'video not found (removed or private?)'}`);\n}\n\n// No captions on a Short usually means music only, so it's a No-speech Reel, not a failure\nconst text = (r.transcript_text ?? '').trim();\nconst hasSpeech = r.status === 'success' && text.split(/\\s+/).filter(Boolean).length >= MIN_WORDS;\n\n// Shorts have no separate caption, so title + description play that part\nconst caption = [r.title, r.description].filter(Boolean).join('\\n\\n').slice(0, 2000);\n\nreturn {\n  json: {\n    id: reel.id,\n    url: reel.url,\n    caption,\n    has_speech: hasSpeech,\n    transcript: hasSpeech ? text : '',\n  },\n};\n"
+      },
+      "id": "e24fb0d9-18a2-464d-a077-872dd46c9b08",
+      "name": "YouTube transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reels",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $json.url }}"
+            },
+            {
+              "fieldId": "caption",
+              "fieldValue": "={{ $json.caption }}"
+            },
+            {
+              "fieldId": "has_speech",
+              "fieldValue": "={{ $json.has_speech }}"
+            },
+            {
+              "fieldId": "transcript",
+              "fieldValue": "={{ $json.transcript }}"
+            }
+          ]
+        }
+      },
+      "id": "48056853-a941-4f88-a731-94847be10009",
+      "name": "Save transcript",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        16
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node \"Describe failure\" (mode: Run Once for Each Item).\n// Every failed step's error output ends here. It counts the attempt and gives up\n// after one retry, which makes the Reel a Failed Reel for the Digest.\n\nconst MAX_ATTEMPTS = 2; // first try + one retry\n\nconst reel = $('Loop over reels').item.json;\nconst e = $json.error;\nconst message = e\n  ? (typeof e === 'string' ? e : e.message ?? JSON.stringify(e))\n  : `Can't read ${reel.platform} links yet`; // came from the Switch's fallback output\n\nconst attempts = (reel.retry_count ?? 0) + 1;\nreturn {\n  json: {\n    id: reel.id,\n    retry_count: attempts,\n    status: attempts >= MAX_ATTEMPTS ? 'failed' : 'new',\n    last_error: String(message).slice(0, 500),\n  },\n};\n"
+      },
+      "id": "cc9031b1-3ecf-4649-9761-39966e4b4797",
+      "name": "Describe failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reels",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "retry_count",
+              "fieldValue": "={{ $json.retry_count }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "last_error",
+              "fieldValue": "={{ $json.last_error }}"
+            }
+          ]
+        }
+      },
+      "id": "02ab86a4-384a-463b-a173-ae70488eb346",
+      "name": "Save failure",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1904,
+        240
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 10 minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch new Reels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch new Reels": {
+      "main": [
+        [
+          {
+            "node": "Loop over reels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop over reels": {
+      "main": [
+        null,
+        [
+          {
+            "node": "Which platform?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Which platform?": {
+      "main": [
+        [
+          {
+            "node": "Apify: Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Apify: TikTok",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Apify: YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify: Instagram": {
+      "main": [
+        [
+          {
+            "node": "Pick media",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify: TikTok": {
+      "main": [
+        [
+          {
+            "node": "Pick media",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify: YouTube": {
+      "main": [
+        [
+          {
+            "node": "YouTube transcript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick media": {
+      "main": [
+        [
+          {
+            "node": "Download media",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download media": {
+      "main": [
+        [
+          {
+            "node": "Name file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Name file": {
+      "main": [
+        [
+          {
+            "node": "Whisper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Whisper": {
+      "main": [
+        [
+          {
+            "node": "Check speech",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check speech": {
+      "main": [
+        [
+          {
+            "node": "Save transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube transcript": {
+      "main": [
+        [
+          {
+            "node": "Save transcript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save transcript": {
+      "main": [
+        [
+          {
+            "node": "Loop over reels",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Describe failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Describe failure": {
+      "main": [
+        [
+          {
+            "node": "Save failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save failure": {
+      "main": [
+        [
+          {
+            "node": "Loop over reels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "cea2f884-218a-4069-ae1a-8eeb971170e4",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "52bb93e5113a268bd5dd1d73cfa885dd1c714d1431c8e6adcce1698c99d56232"
+  },
+  "nodeGroups": [],
+  "id": "QBXdPmZ6TpUMlS2D",
+  "tags": []
+}
