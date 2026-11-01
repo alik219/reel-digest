@@ -1,0 +1,18 @@
+# Runs n8n locally at http://localhost:5678
+# Start:  docker compose up -d     Stop:  docker compose down
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.45.7
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    env_file: .env
+    environment:
+      - GENERIC_TIMEZONE=America/Toronto   # schedules (Sunday 9 AM) use Toronto time
+      - TZ=America/Toronto
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false # lets workflows read TELEGRAM_BOT_TOKEN from .env
+    volumes:
+      - n8n_data:/home/node/.n8n           # workflows and credentials survive restarts
+
+volumes:
+  n8n_data:
