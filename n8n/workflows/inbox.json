@@ -3,20 +3,6 @@
   "nodes": [
     {
       "parameters": {
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getUpdates?timeout=0",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        -224,
-        -16
-      ],
-      "id": "e59ae75b-71cc-4995-b3ef-11516e3ee573",
-      "name": "Fetch updates"
-    },
-    {
-      "parameters": {
         "rule": {
           "interval": [
             {
@@ -37,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// n8n Code node \"Parse updates\" (mode: Run Once for All Items).\n// Input: Telegram's getUpdates response. Output: one item per message,\n// each with a `route` of \"ignore\", \"noLink\" or \"link\" for the Switch node.\n\nconst MY_TELEGRAM_ID = 9225448547; // ← replace 0 with your own Telegram user ID\n\nconst updates = $input.first().json.result ?? [];\nif (updates.length === 0) return []; // nothing new: the run stops here\n\n// Confirming this ID + 1 at the end tells Telegram not to send these again\nconst maxUpdateId = Math.max(...updates.map((u) => u.update_id));\n\n// n8n's Code sandbox has no `URL` class, so links are split with a regex instead\nfunction splitUrl(raw) {\n  const [, host = '', path = '', query = ''] =\n    raw.match(/^https?:\\/\\/([^/?#]+)([^?#]*)(\\?[^#]*)?/i) ?? [];\n  return { host: host.toLowerCase(), path, query };\n}\n\nfunction cleanUrl(raw) {\n  const { host, path, query } = splitUrl(raw);\n\n  // Instagram: /reel/X, /reels/X and /p/X are the same Reel, so keep only the code\n  // (/share/… links hide the real code; step 3 resolves those)\n  const insta = host.endsWith('instagram.com')\n    && !path.startsWith('/share/')\n    && path.match(/^\\/(?:[\\w.]+\\/)?(?:reels?|p|tv)\\/([\\w-]+)/);\n  if (insta) return `https://www.instagram.com/reel/${insta[1]}`;\n\n  const videoId = query.match(/[?&]v=([^&]+)/); // youtube.com/watch?v=… needs this one\n  // drop tracking like ?igsh= and ?is_from_webapp=, and any #fragment\n  return `https://${host}${path.replace(/\\/$/, '')}${videoId ? `?v=${videoId[1]}` : ''}`;\n}\n\nfunction platformOf(url) {\n  const { host } = splitUrl(url);\n  if (host.includes('tiktok.com')) return 'tiktok';\n  if (host.includes('instagram.com')) return 'instagram';\n  if (host.includes('youtube.com') || host.includes('youtu.be')) return 'youtube';\n  return 'other';\n}\n\nreturn updates.map((u) => {\n  const msg = u.message;\n  if (!msg || msg.from?.id !== MY_TELEGRAM_ID) {\n    return { json: { route: 'ignore', maxUpdateId } }; // not you: no reply, no AI\n  }\n\n  const text = msg.text ?? msg.caption ?? '';\n  const found = text.match(/https?:\\/\\/\\S+/i);\n  const base = { chatId: msg.chat.id, messageId: msg.message_id, maxUpdateId };\n  if (!found) return { json: { ...base, route: 'noLink' } };\n\n  const url = cleanUrl(found[0]);\n  const note = text.replace(found[0], '').trim();\n  return {\n    json: { ...base, route: 'link', url, platform: platformOf(url), note: note || null },\n  };\n});\n"
+        "jsCode": "// n8n Code node \"Parse updates\" (mode: Run Once for All Items).\n// Input: the unhandled rows of Supabase's telegram_updates table (step 6), each with\n// one Telegram update in `payload`. Output: one item per message, each with a\n// `route` of \"ignore\", \"noLink\" or \"link\" for the Switch node.\n\nconst MY_TELEGRAM_ID = 9225448547; // ← replace 0 with your own Telegram user ID\n\nconst updates = $input.all().map((i) => i.json.payload).filter(Boolean);\nif (updates.length === 0) return []; // nothing new: the run stops here\n\n// Kept for reference in each item; \"Confirm updates\" marks the fetched rows as handled\nconst maxUpdateId = Math.max(...updates.map((u) => u.update_id));\n\n// n8n's Code sandbox has no `URL` class, so links are split with a regex instead\nfunction splitUrl(raw) {\n  const [, host = '', path = '', query = ''] =\n    raw.match(/^https?:\\/\\/([^/?#]+)([^?#]*)(\\?[^#]*)?/i) ?? [];\n  return { host: host.toLowerCase(), path, query };\n}\n\nfunction cleanUrl(raw) {\n  const { host, path, query } = splitUrl(raw);\n\n  // Instagram: /reel/X, /reels/X and /p/X are the same Reel, so keep only the code\n  // (/share/… links hide the real code; step 3 resolves those)\n  const insta = host.endsWith('instagram.com')\n    && !path.startsWith('/share/')\n    && path.match(/^\\/(?:[\\w.]+\\/)?(?:reels?|p|tv)\\/([\\w-]+)/);\n  if (insta) return `https://www.instagram.com/reel/${insta[1]}`;\n\n  const videoId = query.match(/[?&]v=([^&]+)/); // youtube.com/watch?v=… needs this one\n  // drop tracking like ?igsh= and ?is_from_webapp=, and any #fragment\n  return `https://${host}${path.replace(/\\/$/, '')}${videoId ? `?v=${videoId[1]}` : ''}`;\n}\n\nfunction platformOf(url) {\n  const { host } = splitUrl(url);\n  if (host.includes('tiktok.com')) return 'tiktok';\n  if (host.includes('instagram.com')) return 'instagram';\n  if (host.includes('youtube.com') || host.includes('youtu.be')) return 'youtube';\n  return 'other';\n}\n\nreturn updates.map((u) => {\n  const msg = u.message;\n  if (!msg || msg.from?.id !== MY_TELEGRAM_ID) {\n    return { json: { route: 'ignore', maxUpdateId } }; // not you: no reply, no AI\n  }\n\n  const text = msg.text ?? msg.caption ?? '';\n  const found = text.match(/https?:\\/\\/\\S+/i);\n  const base = { chatId: msg.chat.id, messageId: msg.message_id, maxUpdateId };\n  if (!found) return { json: { ...base, route: 'noLink' } };\n\n  const url = cleanUrl(found[0]);\n  const note = text.replace(found[0], '').trim();\n  return {\n    json: { ...base, route: 'link', url, platform: platformOf(url), note: note || null },\n  };\n});\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -155,8 +141,8 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        688,
-        -208
+        720,
+        -304
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -299,8 +285,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        464,
-        48
+        816,
+        32
       ]
     },
     {
@@ -317,8 +303,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1536,
-        224
+        1584,
+        32
       ],
       "webhookId": "106987c3-d6c4-4d1d-b498-7fd38e13a4be",
       "credentials": {
@@ -330,21 +316,6 @@
     },
     {
       "parameters": {
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getUpdates?offset={{ $('Parse updates').first().json.maxUpdateId + 1 }}&limit=1&timeout=0",
-        "options": {}
-      },
-      "id": "90761b9a-2bca-481c-a7ee-e67f00f5e8c7",
-      "name": "Confirm updates",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        1840,
-        80
-      ],
-      "executeOnce": true
-    },
-    {
-      "parameters": {
         "options": {}
       },
       "id": "ec351254-514a-4074-93c0-df86ac8c21d1",
@@ -352,35 +323,66 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        464,
-        -208
+        496,
+        -128
       ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "telegram_updates",
+        "filterType": "string",
+        "filterString": "processed_at=is.null"
+      },
+      "id": "ab6df166-f164-4edd-a4aa-ddcfb4cc27f8",
+      "name": "Fetch updates",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -16
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "telegram_updates",
+        "filterType": "string",
+        "filterString": "=update_id=in.({{ $('Fetch updates').all().map((i) => i.json.update_id).join(',') }})",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "processed_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "3e3eb668-98dc-4a16-a7fd-c1df8a333763",
+      "name": "Confirm updates",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        80
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
     }
   ],
   "pinData": {},
   "connections": {
-    "Every 2 minutes": {
-      "main": [
-        [
-          {
-            "node": "Fetch updates",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch updates": {
-      "main": [
-        [
-          {
-            "node": "Parse updates",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Parse updates": {
       "main": [
         [
@@ -468,17 +470,6 @@
         ]
       ]
     },
-    "Send Receipt": {
-      "main": [
-        [
-          {
-            "node": "Confirm updates",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Loop over links": {
       "main": [
         [
@@ -518,6 +509,39 @@
           }
         ]
       ]
+    },
+    "Every 2 minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch updates": {
+      "main": [
+        [
+          {
+            "node": "Parse updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Receipt": {
+      "main": [
+        [
+          {
+            "node": "Confirm updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -526,7 +550,7 @@
     "binaryMode": "separate",
     "availableInMCP": true
   },
-  "versionId": "91b70c09-f843-4366-91a1-660c9c183112",
+  "versionId": "76f86cac-6453-4cb5-8a55-acaa4e60f852",
   "meta": {
     "aiBuilderAssisted": true,
     "builderVariant": "mcp",

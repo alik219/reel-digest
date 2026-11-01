@@ -13,7 +13,7 @@ n8n (Docker, local) · Telegram bot · Apify · Groq Whisper · OpenRouter · Su
 - [x] 3. Apify + Groq Whisper → Transcript: follow [docs/step-3.md](docs/step-3.md) (workflow: [n8n/workflows/transcribe.json](n8n/workflows/transcribe.json))
 - [x] 4. OpenRouter per-Reel summary: follow [docs/step-4.md](docs/step-4.md) (workflow: [n8n/workflows/summarise.json](n8n/workflows/summarise.json))
 - [x] 5. Sunday Digest via Resend: follow [docs/step-5.md](docs/step-5.md) (workflow: [n8n/workflows/digest.json](n8n/workflows/digest.json))
-- [ ] 6. Supabase catcher (Reels saved while the PC is off)
+- [x] 6. Supabase catcher (Reels saved while the PC is off): follow [docs/step-6.md](docs/step-6.md)
 
 ## Later (parked)
 

@@ -70,7 +70,10 @@ Reply with ONLY a JSON object, no markdown:
 
 Use only ideas that appear in the videos. If there are no videos this week, set "sections" to {}, "habit_of_the_week" to null, and write a two-sentence intro encouraging the reader to save a few this week.`;
 
-const end = $now.setZone('America/Toronto').startOf('day');
+// The week always ends on the most recent Sunday, so a Monday catch-up run
+// (PC was off at 9 AM Sunday) still covers and labels the same week
+const today = $now.setZone('America/Toronto').startOf('day');
+const end = today.minus({ days: today.weekday % 7 }); // Luxon: Sunday is 7, Monday 1
 const start = end.minus({ days: 6 });
 
 return [{

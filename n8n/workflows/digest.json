@@ -6,18 +6,22 @@
         "rule": {
           "interval": [
             {
-              "field": "weeks",
-              "triggerAtHour": 9
+              "field": "cronExpression",
+              "expression": "0 9-23 * * 0"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * 1"
             }
           ]
         }
       },
       "id": "f15b5a9b-a47f-42cb-ba77-3bf4085ced68",
-      "name": "Sunday 9 AM",
+      "name": "Hourly, Sun 9 AM to Mon",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -496,
+        -944,
         0
       ]
     },
@@ -47,7 +51,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// n8n Code node \"Prepare week\" (mode: Run Once for All Items).\n// Input: every Reel not yet in a Digest (done or failed). Output: one item with the\n// week grouped by Category, the Failed Reels, and the OpenRouter request that writes\n// the article's connecting text. The summaries and Action Steps themselves go into\n// the email untouched (see \"Build email\"), so nothing is lost or invented.\n\nconst MODELS = [\n  'openai/gpt-oss-120b:free',\n  'google/gemma-4-31b-it:free',\n  'openrouter/free',\n];\n\n// The order Categories appear in the Digest\nconst CATEGORIES = [\n  'Self-Help & Mindset',\n  'Health & Fitness',\n  'Socialising & Relationships',\n  'Money & Career',\n  'AI & Tech',\n  'Other',\n];\n\n// \"Always Output Data\" sends one empty item when there are no Reels at all\nconst rows = $input.all().map((i) => i.json).filter((r) => r.id);\nconst done = rows.filter((r) => r.status === 'done');\nconst failed = rows.filter((r) => r.status === 'failed');\n\nconst categories = CATEGORIES\n  .map((name) => ({\n    name,\n    reels: done\n      .filter((r) => (CATEGORIES.includes(r.category) ? r.category : 'Other') === name)\n      .map((r) => ({\n        id: r.id,\n        url: r.url,\n        platform: r.platform,\n        note: r.note,\n        has_speech: r.has_speech,\n        summary: r.summary,\n        action_steps: Array.isArray(r.action_steps) ? r.action_steps : [],\n      })),\n  }))\n  .filter((c) => c.reels.length > 0);\n\n// What the model sees: summaries and steps only, grouped like the email\nconst week = categories.length\n  ? categories\n      .map((c) => `## ${c.name}\\n` + c.reels\n        .map((r) => `- ${r.summary}\\n  Steps: ${r.action_steps.map((s) => s.step).join('; ') || '(none)'}`)\n        .join('\\n'))\n      .join('\\n\\n')\n  : '(No Reels were saved this week.)';\n\nconst SYSTEM = `You write the connecting text for a personal weekly digest of short self-improvement videos the reader saved. Voice: James Clear's Atomic Habits: warm, plain, practical, short sentences, no hype, no emojis.\n\nYou get the week's videos as summaries grouped by Category. The summaries and action steps are shown to the reader separately, so don't repeat them. Your job is only the glue.\n\nReply with ONLY a JSON object, no markdown:\n{\n  \"title\": \"a short title for this week, max 8 words\",\n  \"intro\": \"2 short paragraphs (separate them with a blank line): the thread that runs through this week's videos and why it matters\",\n  \"sections\": { \"<Category name exactly as given>\": \"one sentence that introduces that group\" },\n  \"habit_of_the_week\": {\n    \"habit\": \"the single habit from this week most worth starting\",\n    \"why\": \"one sentence on why this one\",\n    \"two_minute_version\": \"how to start it in under two minutes\",\n    \"habit_stack\": \"After I [an existing daily habit], I will [the new habit].\"\n  }\n}\n\nUse only ideas that appear in the videos. If there are no videos this week, set \"sections\" to {}, \"habit_of_the_week\" to null, and write a two-sentence intro encouraging the reader to save a few this week.`;\n\nconst end = $now.setZone('America/Toronto').startOf('day');\nconst start = end.minus({ days: 6 });\n\nreturn [{\n  json: {\n    week_start: start.toISODate(),\n    week_end: end.toISODate(),\n    week_label: `${start.toFormat('d LLL')} – ${end.toFormat('d LLL yyyy')}`,\n    reel_ids: rows.map((r) => r.id),\n    reel_count: done.length,\n    categories,\n    failed: failed.map((r) => ({ url: r.url, platform: r.platform, note: r.note, last_error: r.last_error })),\n    body: {\n      models: MODELS,\n      messages: [\n        { role: 'system', content: SYSTEM },\n        { role: 'user', content: `This week's videos:\\n\\n${week}` },\n      ],\n      response_format: { type: 'json_object' },\n      temperature: 0.5,\n    },\n  },\n}];\n"
+        "jsCode": "// n8n Code node \"Prepare week\" (mode: Run Once for All Items).\n// Input: every Reel not yet in a Digest (done or failed). Output: one item with the\n// week grouped by Category, the Failed Reels, and the OpenRouter request that writes\n// the article's connecting text. The summaries and Action Steps themselves go into\n// the email untouched (see \"Build email\"), so nothing is lost or invented.\n\nconst MODELS = [\n  'openai/gpt-oss-120b:free',\n  'google/gemma-4-31b-it:free',\n  'openrouter/free',\n];\n\n// The order Categories appear in the Digest\nconst CATEGORIES = [\n  'Self-Help & Mindset',\n  'Health & Fitness',\n  'Socialising & Relationships',\n  'Money & Career',\n  'AI & Tech',\n  'Other',\n];\n\n// \"Always Output Data\" sends one empty item when there are no Reels at all\nconst rows = $input.all().map((i) => i.json).filter((r) => r.id);\nconst done = rows.filter((r) => r.status === 'done');\nconst failed = rows.filter((r) => r.status === 'failed');\n\nconst categories = CATEGORIES\n  .map((name) => ({\n    name,\n    reels: done\n      .filter((r) => (CATEGORIES.includes(r.category) ? r.category : 'Other') === name)\n      .map((r) => ({\n        id: r.id,\n        url: r.url,\n        platform: r.platform,\n        note: r.note,\n        has_speech: r.has_speech,\n        summary: r.summary,\n        action_steps: Array.isArray(r.action_steps) ? r.action_steps : [],\n      })),\n  }))\n  .filter((c) => c.reels.length > 0);\n\n// What the model sees: summaries and steps only, grouped like the email\nconst week = categories.length\n  ? categories\n      .map((c) => `## ${c.name}\\n` + c.reels\n        .map((r) => `- ${r.summary}\\n  Steps: ${r.action_steps.map((s) => s.step).join('; ') || '(none)'}`)\n        .join('\\n'))\n      .join('\\n\\n')\n  : '(No Reels were saved this week.)';\n\nconst SYSTEM = `You write the connecting text for a personal weekly digest of short self-improvement videos the reader saved. Voice: James Clear's Atomic Habits: warm, plain, practical, short sentences, no hype, no emojis.\n\nYou get the week's videos as summaries grouped by Category. The summaries and action steps are shown to the reader separately, so don't repeat them. Your job is only the glue.\n\nReply with ONLY a JSON object, no markdown:\n{\n  \"title\": \"a short title for this week, max 8 words\",\n  \"intro\": \"2 short paragraphs (separate them with a blank line): the thread that runs through this week's videos and why it matters\",\n  \"sections\": { \"<Category name exactly as given>\": \"one sentence that introduces that group\" },\n  \"habit_of_the_week\": {\n    \"habit\": \"the single habit from this week most worth starting\",\n    \"why\": \"one sentence on why this one\",\n    \"two_minute_version\": \"how to start it in under two minutes\",\n    \"habit_stack\": \"After I [an existing daily habit], I will [the new habit].\"\n  }\n}\n\nUse only ideas that appear in the videos. If there are no videos this week, set \"sections\" to {}, \"habit_of_the_week\" to null, and write a two-sentence intro encouraging the reader to save a few this week.`;\n\n// The week always ends on the most recent Sunday, so a Monday catch-up run\n// (PC was off at 9 AM Sunday) still covers and labels the same week\nconst today = $now.setZone('America/Toronto').startOf('day');\nconst end = today.minus({ days: today.weekday % 7 }); // Luxon: Sunday is 7, Monday 1\nconst start = end.minus({ days: 6 });\n\nreturn [{\n  json: {\n    week_start: start.toISODate(),\n    week_end: end.toISODate(),\n    week_label: `${start.toFormat('d LLL')} – ${end.toFormat('d LLL yyyy')}`,\n    reel_ids: rows.map((r) => r.id),\n    reel_count: done.length,\n    categories,\n    failed: failed.map((r) => ({ url: r.url, platform: r.platform, note: r.note, last_error: r.last_error })),\n    body: {\n      models: MODELS,\n      messages: [\n        { role: 'system', content: SYSTEM },\n        { role: 'user', content: `This week's videos:\\n\\n${week}` },\n      ],\n      response_format: { type: 'json_object' },\n      temperature: 0.5,\n    },\n  },\n}];\n"
       },
       "id": "04b71ffb-8e5b-4c24-b5be-df8c8f6fd525",
       "name": "Prepare week",
@@ -233,21 +237,67 @@
           "name": "Supabase account"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "digests",
+        "limit": 1,
+        "filterType": "string",
+        "filterString": "=week_end=eq.{{ $now.setZone('America/Toronto').startOf('day').minus({ days: $now.setZone('America/Toronto').weekday % 7 }).toISODate() }}&sent_at=not.is.null"
+      },
+      "id": "5c990d47-1d0c-4f9b-ab1b-aeabb11298a7",
+      "name": "Already sent?",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "JsjCuAODvZtY15p6",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4efd99af-3300-4239-89b5-c50f19ad5f5d",
+      "name": "Not sent yet?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -496,
+        0
+      ]
     }
   ],
   "pinData": {},
   "connections": {
-    "Sunday 9 AM": {
-      "main": [
-        [
-          {
-            "node": "Fetch week's Reels",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Fetch week's Reels": {
       "main": [
         [
@@ -324,15 +374,48 @@
           }
         ]
       ]
+    },
+    "Hourly, Sun 9 AM to Mon": {
+      "main": [
+        [
+          {
+            "node": "Already sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already sent?": {
+      "main": [
+        [
+          {
+            "node": "Not sent yet?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not sent yet?": {
+      "main": [
+        [
+          {
+            "node": "Fetch week's Reels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": true
   },
-  "versionId": "e48fb32e-69f2-419d-bc0a-693e12c4dc54",
+  "versionId": "495247cc-72c1-4bd3-b584-6ccc7fbf8921",
   "meta": {
     "aiBuilderAssisted": true,
     "builderVariant": "mcp",

@@ -1,5 +1,7 @@
 # Step 5: Sunday Digest via Resend
 
+> **Changed in [step 6](step-6.md):** the trigger now runs hourly from Sunday 9 AM to the end of Monday, and two nodes (**Already sent?**, **Not sent yet?**) make sure only the first run that finds the PC on sends the week's Digest.
+
 Goal: every Sunday at 9 AM (Toronto time), one email arrives: an Atomic Habits-style article of the week's Reels, grouped by Category, with their Action Steps, a **Habit of the week**, and any Failed Reels listed at the end to rewatch.
 
 This is a **fourth workflow, "Digest"**.

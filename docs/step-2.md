@@ -1,5 +1,7 @@
 # Step 2: n8n + Telegram bot + Receipt
 
+> **Changed in [step 6](step-6.md):** Telegram now pushes messages to a Supabase function, so **Fetch updates** and **Confirm updates** read and mark rows in `telegram_updates` instead of calling `getUpdates`. The rest of this guide still applies.
+
 Goal: share a Reel to your bot → within ~2 minutes it's a row in Supabase `reels` and the bot replies with a Receipt.
 
 ## A. Lock the Supabase helper (2 min)

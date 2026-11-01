@@ -1,13 +1,14 @@
 // n8n Code node "Parse updates" (mode: Run Once for All Items).
-// Input: Telegram's getUpdates response. Output: one item per message,
-// each with a `route` of "ignore", "noLink" or "link" for the Switch node.
+// Input: the unhandled rows of Supabase's telegram_updates table (step 6), each with
+// one Telegram update in `payload`. Output: one item per message, each with a
+// `route` of "ignore", "noLink" or "link" for the Switch node.
 
 const MY_TELEGRAM_ID = 0; // ← replace 0 with your own Telegram user ID
 
-const updates = $input.first().json.result ?? [];
+const updates = $input.all().map((i) => i.json.payload).filter(Boolean);
 if (updates.length === 0) return []; // nothing new: the run stops here
 
-// Confirming this ID + 1 at the end tells Telegram not to send these again
+// Kept for reference in each item; "Confirm updates" marks the fetched rows as handled
 const maxUpdateId = Math.max(...updates.map((u) => u.update_id));
 
 // n8n's Code sandbox has no `URL` class, so links are split with a regex instead
