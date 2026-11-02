@@ -153,3 +153,15 @@ This marks every Reel in the email as "in this Digest", so it's never sent twice
 - **Link Reels changes nothing:** check `digest_id` in Supabase. If it's empty, look at the filter string (`id=in.(…)`).
 
 When it all works, tick step 5 in the README and export the workflow (**⋯** → **Export JSON**) to `n8n/workflows/digest.json`.
+
+## Send one now: `/digest`
+
+Send **`/digest`** to the bot (it's also in the bot's **/** menu) to get a Digest straight away, on any day.
+
+- **Inbox:** Parse updates labels an exact `/digest` with `route = digest`. **Route message** has a 4th output, `digest` → **Receipt: digest** (`📬 Sending your Digest now…`) → **Send Receipt**. Alongside it, **Start Digest** (Execute Sub-workflow, Digest, **Wait for Sub-Workflow Completion** off) starts the Digest without making you wait.
+- **Digest:** a second trigger, **When /digest is sent** (Execute Workflow Trigger, Accept all data), goes straight to **Fetch week's Reels**, skipping the once-a-week check. **Prepare week** dates a manual Digest from the first unsent Reel up to today, so it isn't labelled as last week.
+- It sends everything **not yet in a Digest**, and marks those Reels as sent, so Sunday's email holds only what you share after it. Nothing is sent twice. With nothing new, you get the short "No Reels this week" note.
+- A `/digest` on a Sunday counts as that week's Digest, so the scheduled one that week is skipped.
+- When the email has gone out, **Tell me it's sent** (Telegram, after **Link Reels**, Execute Once) messages you `✅ Sent! "<subject>" (N Reels) is in your email.` This happens for `/digest` and for the Sunday schedule. Chat ID is your Telegram ID (`9225448547`); in a private chat with a bot they're the same number.
+
+To change the Sunday time instead, edit the two cron rules in **Hourly, Sun 9 AM to Mon** (for example `0 8-23 * * 6` and `0 * * * 0` for Saturday 8 AM with a Sunday catch-up), then **Publish**.

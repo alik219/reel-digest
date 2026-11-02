@@ -1,7 +1,7 @@
 // n8n Code node "Parse updates" (mode: Run Once for All Items).
 // Input: the unhandled rows of Supabase's telegram_updates table (step 6), each with
 // one Telegram update in `payload`. Output: one item per message, each with a
-// `route` of "ignore", "noLink" or "link" for the Switch node.
+// `route` of "ignore", "noLink", "link" or "digest" for the Switch node.
 
 const MY_TELEGRAM_ID = 0; // ← replace 0 with your own Telegram user ID
 
@@ -48,8 +48,12 @@ return updates.map((u) => {
   }
 
   const text = msg.text ?? msg.caption ?? '';
-  const found = text.match(/https?:\/\/\S+/i);
   const base = { chatId: msg.chat.id, messageId: msg.message_id, maxUpdateId };
+
+  // "/digest" (or "/digest@botname" from Telegram's command menu) sends a Digest now
+  if (/^\/digest(@\w+)?$/i.test(text.trim())) return { json: { ...base, route: 'digest' } };
+
+  const found = text.match(/https?:\/\/\S+/i);
   if (!found) return { json: { ...base, route: 'noLink' } };
 
   const url = cleanUrl(found[0]);

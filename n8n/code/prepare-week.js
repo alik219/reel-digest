@@ -1,4 +1,5 @@
 // n8n Code node "Prepare week" (mode: Run Once for All Items).
+// Started by the Sunday schedule or by "/digest" in Telegram.
 // Input: every Reel not yet in a Digest (done or failed). Output: one item with the
 // week grouped by Category, the Failed Reels, and the OpenRouter request that writes
 // the article's connecting text. The summaries and Action Steps themselves go into
@@ -70,17 +71,29 @@ Reply with ONLY a JSON object, no markdown:
 
 Use only ideas that appear in the videos. If there are no videos this week, set "sections" to {}, "habit_of_the_week" to null, and write a two-sentence intro encouraging the reader to save a few this week.`;
 
-// The week always ends on the most recent Sunday, so a Monday catch-up run
-// (PC was off at 9 AM Sunday) still covers and labels the same week
 const today = $now.setZone('America/Toronto').startOf('day');
-const end = today.minus({ days: today.weekday % 7 }); // Luxon: Sunday is 7, Monday 1
-const start = end.minus({ days: 6 });
+const manual = $('When /digest is sent').isExecuted; // started from Telegram, not the schedule
+
+let start;
+let end;
+if (manual) {
+  // "/digest": everything since the last Digest, from the first of those Reels up to today
+  const first = rows.map((r) => r.shared_at).filter(Boolean).sort()[0];
+  end = today;
+  start = first ? DateTime.fromISO(first).setZone('America/Toronto').startOf('day') : today;
+} else {
+  // Scheduled: the week always ends on the most recent Sunday, so a Monday catch-up
+  // run (PC was off at 9 AM Sunday) still covers and labels the same week
+  end = today.minus({ days: today.weekday % 7 }); // Luxon: Sunday is 7, Monday 1
+  start = end.minus({ days: 6 });
+}
+const sameDay = start.toISODate() === end.toISODate();
 
 return [{
   json: {
     week_start: start.toISODate(),
     week_end: end.toISODate(),
-    week_label: `${start.toFormat('d LLL')} – ${end.toFormat('d LLL yyyy')}`,
+    week_label: sameDay ? end.toFormat('d LLL yyyy') : `${start.toFormat('d LLL')} – ${end.toFormat('d LLL yyyy')}`,
     reel_ids: rows.map((r) => r.id),
     reel_count: done.length,
     categories,
